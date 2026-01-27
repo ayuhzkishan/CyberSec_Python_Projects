@@ -1,4 +1,8 @@
 import os
+import json
+import hashlib
+import argparse
+
 
 MAGIC_NUMBERS = {
     b"\x89PNG\r\n\x1a\n": "PNG Image",
@@ -17,67 +21,134 @@ EXTENSION_MAP = {
     ".elf": "Linux ELF Executable",
 }
 
-def read_file_header(filepath, num_bytes=16):
-    """Read the first bytes of a file (binary header)."""
+EXECUTABLE_TYPES = [
+    "Windows Executable",
+    "Linux ELF Executable",
+]
+
+def read_file_header(filepath, size=16):
     with open(filepath, "rb") as f:
-        return f.read(num_bytes)
+        return f.read(size)
 
 
-def detect_file_type(header_bytes):
-    """Detect real file type using magic numbers."""
-    for magic, filetype in MAGIC_NUMBERS.items():
-        if header_bytes.startswith(magic):
-            return filetype
+def detect_file_type(header):
+    for magic, ftype in MAGIC_NUMBERS.items():
+        if header.startswith(magic):
+            return ftype
     return "Unknown"
 
 
 def get_extension(filepath):
-    """Extract file extension."""
     return os.path.splitext(filepath)[1].lower()
 
 
+def calculate_sha256(filepath):
+    sha256 = hashlib.sha256()
+    with open(filepath, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            sha256.update(chunk)
+    return sha256.hexdigest()
+
+
+def assess_severity(detected, expected):
+    if detected in EXECUTABLE_TYPES and expected not in EXECUTABLE_TYPES:
+        return "HIGH"
+    if detected != expected:
+        return "MEDIUM"
+    return "LOW"
+
+
 def analyze_file(filepath):
-    """Analyze file and detect extension mismatch."""
     header = read_file_header(filepath)
     detected_type = detect_file_type(header)
-
     extension = get_extension(filepath)
     expected_type = EXTENSION_MAP.get(extension, "Unknown")
 
-    suspicious = False
-    if detected_type != "Unknown" and expected_type != "Unknown":
-        if detected_type != expected_type:
-            suspicious = True
+    severity = assess_severity(detected_type, expected_type)
+    sha256 = calculate_sha256(filepath)
+
+    suspicious = severity in ["MEDIUM", "HIGH"]
 
     return {
-        "file": filepath,
+        "file_path": filepath,
         "extension": extension,
         "detected_type": detected_type,
         "expected_type": expected_type,
+        "severity": severity,
+        "sha256": sha256,
         "suspicious": suspicious,
     }
 
+def scan_path(path):
+    results = []
+
+    if os.path.isfile(path):
+        try:
+            results.append(analyze_file(path))
+        except Exception:
+            pass
+        return results
+
+    for root, _, files in os.walk(path):
+        for name in files:
+            full_path = os.path.join(root, name)
+            try:
+                results.append(analyze_file(full_path))
+            except Exception:
+                continue
+
+    return results
+
+
+def save_json_report(results, output_file):
+    with open(output_file, "w") as f:
+        json.dump(results, f, indent=4)
+
+
+def print_summary(results):
+    high = sum(1 for r in results if r["severity"] == "HIGH")
+    medium = sum(1 for r in results if r["severity"] == "MEDIUM")
+
+    print("\n--- Scan Summary ---")
+    print(f"Total files scanned: {len(results)}")
+    print(f"HIGH severity: {high}")
+    print(f"MEDIUM severity: {medium}")
+
+    if high > 0:
+        print("⚠️  Potential malicious masquerading detected.")
 
 def main():
-    filepath = input("Enter file path: ").strip()
+    parser = argparse.ArgumentParser(
+        description="Static File Masquerading Scanner (Magic Number Based)"
+    )
+    parser.add_argument(
+        "path",
+        nargs="?",
+        help="File or directory to scan"
+    )
+    parser.add_argument(
+        "-o", "--output",
+        default="scan_report.json",
+        help="Output JSON report file"
+    )
 
-    if not os.path.isfile(filepath):
-        print("❌ Error: File does not exist.")
+    args = parser.parse_args()
+
+    # 🔹 Interactive fallback
+    if not args.path:
+        args.path = input("Enter file or directory path to scan: ").strip()
+
+    if not os.path.exists(args.path):
+        print("❌ Invalid path")
         return
 
-    result = analyze_file(filepath)
+    print(f"[+] Scanning: {args.path}")
+    results = scan_path(args.path)
 
-    print("\n--- File Analysis Report ---")
-    print(f"File: {result['file']}")
-    print(f"Extension: {result['extension']}")
-    print(f"Detected Type: {result['detected_type']}")
-    print(f"Expected Type: {result['expected_type']}")
+    save_json_report(results, args.output)
+    print_summary(results)
 
-    if result["suspicious"]:
-        print("⚠️ WARNING: File type mismatch detected!")
-    else:
-        print("✅ File type matches extension.")
-
+    print(f"\n📄 Report saved to: {args.output}")
 
 if __name__ == "__main__":
     main()
