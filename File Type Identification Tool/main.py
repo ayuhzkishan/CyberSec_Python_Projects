@@ -2,6 +2,7 @@ import os
 import json
 import hashlib
 import argparse
+import math
 
 
 MAGIC_NUMBERS = {
@@ -50,9 +51,41 @@ def calculate_sha256(filepath):
     return sha256.hexdigest()
 
 
-def assess_severity(detected, expected):
+def calculate_entropy(filepath):
+    """Calculates the Shannon Entropy of a file."""
+    byte_counts = [0] * 256
+    total_bytes = 0
+    
+    try:
+        with open(filepath, "rb") as f:
+            while chunk := f.read(65536):  # Read in 64kb chunks
+                total_bytes += len(chunk)
+                for byte in chunk:
+                    byte_counts[byte] += 1
+    except Exception:
+        return 0.0
+
+    if total_bytes == 0:
+        return 0.0
+
+    entropy = 0
+    for count in byte_counts:
+        if count == 0:
+            continue
+        p_x = count / total_bytes
+        entropy -= p_x * math.log2(p_x)
+    
+    return entropy
+
+
+def assess_severity(detected, expected, entropy):
     if detected in EXECUTABLE_TYPES and expected not in EXECUTABLE_TYPES:
         return "HIGH"
+    
+    # High entropy (> 7.5) in executables often means packed/encrypted malware
+    if detected in EXECUTABLE_TYPES and entropy > 7.5:
+        return "HIGH"
+        
     if detected != expected:
         return "MEDIUM"
     return "LOW"
@@ -64,8 +97,10 @@ def analyze_file(filepath):
     extension = get_extension(filepath)
     expected_type = EXTENSION_MAP.get(extension, "Unknown")
 
-    severity = assess_severity(detected_type, expected_type)
     sha256 = calculate_sha256(filepath)
+    entropy = calculate_entropy(filepath)
+    
+    severity = assess_severity(detected_type, expected_type, entropy)
 
     suspicious = severity in ["MEDIUM", "HIGH"]
 
@@ -75,6 +110,7 @@ def analyze_file(filepath):
         "detected_type": detected_type,
         "expected_type": expected_type,
         "severity": severity,
+        "entropy": round(entropy, 4),
         "sha256": sha256,
         "suspicious": suspicious,
     }
@@ -112,7 +148,14 @@ def print_summary(results):
     print("\n--- Scan Summary ---")
     print(f"Total files scanned: {len(results)}")
     print(f"HIGH severity: {high}")
+    print(f"HIGH severity: {high}")
     print(f"MEDIUM severity: {medium}")
+
+    # Highlight high entropy files
+    high_entropy_files = [r for r in results if r["entropy"] > 7.5]
+    if high_entropy_files:
+        print(f"\n[!] Detected {len(high_entropy_files)} files with high entropy (> 7.5).")
+        print("    This may indicate packed or encrypted malware.")
 
     if high > 0:
         print("⚠️  Potential malicious masquerading detected.")
