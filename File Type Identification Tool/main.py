@@ -6,28 +6,64 @@ import math
 
 
 MAGIC_NUMBERS = {
+    # Images
     b"\x89PNG\r\n\x1a\n": "PNG Image",
     b"\xff\xd8\xff": "JPEG Image",
+    b"GIF87a": "GIF Image",
+    b"GIF89a": "GIF Image",
+    b"BM": "BMP Image",
+    b"RIFF": "AVI Video",          # also WAV; disambiguated by offset 8
+    # Documents
     b"%PDF": "PDF Document",
+    b"PK\x03\x04": "ZIP / Office Open XML",  # ZIP, DOCX, XLSX, PPTX share this
+    b"Rar!\x1a\x07": "RAR Archive",
+    b"7z\xbc\xaf'\x1c": "7-Zip Archive",
+    # Audio / Video
+    b"ID3": "MP3 Audio",
+    b"\xff\xfb": "MP3 Audio",
+    b"\x00\x00\x00\x18ftyp": "MP4 Video",
+    b"\x00\x00\x00\x1cftyp": "MP4 Video",
+    # Executables / Bytecode
     b"MZ": "Windows Executable",
     b"\x7fELF": "Linux ELF Executable",
+    b"\xca\xfe\xba\xbe": "Java Class Bytecode",
+    b"\x16\r\r\n": "Python Bytecode",   # Python 3.8+
 }
 
 EXTENSION_MAP = {
+    # Images
     ".png": "PNG Image",
     ".jpg": "JPEG Image",
     ".jpeg": "JPEG Image",
+    ".gif": "GIF Image",
+    ".bmp": "BMP Image",
+    ".avi": "AVI Video",
+    # Documents
     ".pdf": "PDF Document",
+    ".zip": "ZIP / Office Open XML",
+    ".docx": "ZIP / Office Open XML",
+    ".xlsx": "ZIP / Office Open XML",
+    ".pptx": "ZIP / Office Open XML",
+    ".rar": "RAR Archive",
+    ".7z": "7-Zip Archive",
+    # Audio / Video
+    ".mp3": "MP3 Audio",
+    ".mp4": "MP4 Video",
+    # Executables / Bytecode
     ".exe": "Windows Executable",
     ".elf": "Linux ELF Executable",
+    ".class": "Java Class Bytecode",
+    ".pyc": "Python Bytecode",
 }
 
 EXECUTABLE_TYPES = [
     "Windows Executable",
     "Linux ELF Executable",
+    "Java Class Bytecode",
+    "Python Bytecode",
 ]
 
-def read_file_header(filepath, size=16):
+def read_file_header(filepath, size=28):
     with open(filepath, "rb") as f:
         return f.read(size)
 
