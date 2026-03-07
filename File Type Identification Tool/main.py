@@ -148,7 +148,6 @@ def print_summary(results):
     print("\n--- Scan Summary ---")
     print(f"Total files scanned: {len(results)}")
     print(f"HIGH severity: {high}")
-    print(f"HIGH severity: {high}")
     print(f"MEDIUM severity: {medium}")
 
     # Highlight high entropy files
