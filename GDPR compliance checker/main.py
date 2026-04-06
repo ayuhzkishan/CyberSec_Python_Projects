@@ -66,6 +66,8 @@ def print_result(result: dict, found_count: int, total_count: int,
 async def scan_url(url: str, output_dir: str = "evidence", 
                    report_format: str = "html", 
                    save_to_db: bool = True) -> dict:
+    if not url.startswith(('http://', 'https://')):
+        url = f"https://{url}"
     print(f"🔍 Scanning: {url}")
     
     result = await crawl_site(url, output_dir)

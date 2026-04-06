@@ -128,7 +128,7 @@ class BrowserCrawler:
         
         for attempt in range(max_retries):
             try:
-                await page.goto(url, timeout=SETTINGS["timeout"], wait_until="networkidle")
+                await page.goto(url, timeout=SETTINGS["timeout"], wait_until="domcontentloaded")
                 return
             except PlaywrightError as e:
                 last_error = e
@@ -141,7 +141,7 @@ class BrowserCrawler:
     async def _crawl_privacy_policy(self, context, policy_url: str, domain: str, timestamp: str) -> Tuple[Optional[str], Optional[str]]:
         try:
             page = await context.new_page()
-            await page.goto(policy_url, timeout=SETTINGS["timeout"], wait_until="networkidle")
+            await page.goto(policy_url, timeout=SETTINGS["timeout"], wait_until="domcontentloaded")
             
             html_content = await page.content()
             
